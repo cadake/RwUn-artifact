@@ -1,0 +1,28 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "rwun"
+version = "0.1.0"
+description = "A tool for ancilla uncomputation"
+readme = "README.md"
+requires-python = ">=3.6"
+authors = [
+  {name = "Anonymous Authors"}
+]
+dependencies = [
+    'qiskit==0.39.0', 
+    'numpy==1.23.1', 
+    'matplotlib==3.6.2',
+    'z3-solver==4.15.1.0',
+    'llist==0.7.1',
+    'networkx==3.4.2'
+]
+
+[tool.setuptools]
+package-dir = {"" = "."}
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["RwUn*"]

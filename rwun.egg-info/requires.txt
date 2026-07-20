@@ -1,0 +1,6 @@
+qiskit==0.39.0
+numpy==1.23.1
+matplotlib==3.6.2
+z3-solver==4.15.1.0
+llist==0.7.1
+networkx==3.4.2

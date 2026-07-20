@@ -1,0 +1,68 @@
+size, depth, dependency, cycle
+IntegerComparator(200, dirty=False)
+$\SD{200}{200}$
+(0, 0)
+
+MCX(201, dirty=False)
+$\SD{200}{200}$
+(0, 0)
+
+MCRY(10)
+$\SD{6}{5}$
+(0, 0)
+
+Incrementer(101, dirty=False)
+$\SD{200}{100}$
+(0, 0)
+
+DJ(66)
+$\SD{199}{67}$
+(0, 0)
+
+GroverCircuit(6)
+$\SD{200}{68}$
+(0, 0)
+
+MCX(101, dirty=True)
+$\SD{199}{199}$
+(1, 0)
+
+Adder(100)
+$\SD{199}{100}$
+(1, 0)
+
+ConditionalMCS(52, dirty=False)
+$\SD{19}{8}$
+(6, 0)
+
+ConditionalMCS(52, dirty=True)
+$\SD{32}{13}$
+(11, 0)
+
+RiseConditionalMCS(51, dirty=False)
+$\SD{199}{100}$
+(5, 0)
+
+RiseConditionalMCS(27, dirty=True)
+$\SD{200}{103}$
+(7, 0)
+
+IntegerComparator(58, dirty=True)
+$\SD{200}{172}$
+(4, 0)
+
+DirtyHighestBitConstAdder(41)
+$\SD{199}{160}$
+(4, 0)
+
+DirtyIncrementer(25)
+$\SD{195}{147}$
+(61, 1)
+
+DirtyAdder(9)
+$\SD{173}{137}$
+(601, 0)
+
+Incrementer(15, dirty=True)
+$\SD{197}{184}$
+(803, 0)

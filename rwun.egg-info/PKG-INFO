@@ -1,0 +1,46 @@
+Metadata-Version: 2.4
+Name: rwun
+Version: 0.1.0
+Summary: A tool for ancilla uncomputation
+Author: Anonymous Authors
+Requires-Python: >=3.6
+Description-Content-Type: text/markdown
+Requires-Dist: qiskit==0.39.0
+Requires-Dist: numpy==1.23.1
+Requires-Dist: matplotlib==3.6.2
+Requires-Dist: z3-solver==4.15.1.0
+Requires-Dist: llist==0.7.1
+Requires-Dist: networkx==3.4.2
+
+## Reproduce Evaluation
+
+conda create --name rwun --yes python=3.10
+conda activate rwun
+cd Reqomp-master
+pip install .
+
+### Organization
+
+The RwUn implementation is made up of the files in the folder [RwUn](/RwUn/).
+
+All examples presented in the submitted paper can be found in [RwUn/examples](RwUn/examples).
+
+### Paper Claims
+
+To get the result of Table 2, run:
+```
+python run_evaluation.py 0
+```
+This may require minutes and will write two files of results to evaluation folder: dependency_result and table1_result.
+
+To get the result of Fig 11, run and wait for minutes:
+```
+python run_evaluation.py 1
+```
+This may require minutes and will store randomly generated circuit, evaluation results on these circuits and *.pdf corresponds to the result.
+
+To get the result of Fig 10, run:
+```
+python run_evaluation.py 2
+```
+This may require hours and the result is similar with above.

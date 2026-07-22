@@ -1,8 +1,8 @@
 from qiskit.circuit import QuantumRegister, QuantumCircuit, AncillaRegister, Instruction, AncillaQubit, Qubit
 from qiskit.circuit.library.standard_gates import HGate, XGate, ZGate, SGate, SdgGate, TGate, TdgGate
 from qiskit.circuit.library import MCXGate
-from uncomputability import *
-from optimizer import *
+from .uncomputability import *
+from .optimizer import *
 from llist import dllist, dllistnode
 from time import *
 import heapq
@@ -448,4 +448,3 @@ def uncompute(C: 'QuantumCircuit', mode=0):
     #     return uncompAll0(C, True)
     else:
         assert False 
-

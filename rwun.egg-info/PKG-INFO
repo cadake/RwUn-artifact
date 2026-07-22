@@ -3,44 +3,134 @@ Name: rwun
 Version: 0.1.0
 Summary: A tool for ancilla uncomputation
 Author: Anonymous Authors
-Requires-Python: >=3.6
+Requires-Python: <3.11,>=3.10
 Description-Content-Type: text/markdown
-Requires-Dist: qiskit==0.39.0
+License-File: LICENSE
+Requires-Dist: qiskit-terra==0.22.0
 Requires-Dist: numpy==1.23.1
 Requires-Dist: matplotlib==3.6.2
 Requires-Dist: z3-solver==4.15.1.0
 Requires-Dist: llist==0.7.1
 Requires-Dist: networkx==3.4.2
+Dynamic: license-file
 
-## Reproduce Evaluation
+# RwUn Artifact
 
-conda create --name rwun --yes python=3.10
+This artifact contains RwUn, the Reqomp baseline, benchmark drivers, and the
+raw results used for the paper. Evaluation is local and requires no network,
+privileged access, telemetry, or analytics.
+
+## Contents
+
+| Path | Description |
+| --- | --- |
+| `RwUn/` | RwUn implementation and circuit examples |
+| `Reqomp-master/` | Vendored Reqomp baseline |
+| `run_evaluation.py` | Reviewer check and all evaluation modes |
+| `evaluation_results/` | Bundled raw and rendered results |
+
+## Requirements
+
+Docker is recommended. The image was validated on Linux amd64 with Docker
+28.5.2. Building it requires about 4 CPU cores, 8 GiB RAM, and 5 GiB free disk.
+ARM containers have not been validated.
+
+Native installation requires Linux, Python 3.10.18, and pip 25.1. Python 3.11+
+is unsupported because the artifact uses Qiskit Terra 0.22.0.
+
+## Reviewer Check
+
+From this directory, build the image:
+
+```bash
+docker build --tag rwun-artifact:2026 .
+```
+
+Alternatively, load the supplied image archive:
+
+```bash
+gzip --decompress --stdout rwun-artifact-image-linux-amd64.tar.gz \
+  | docker load
+```
+
+Run the complete reviewer check without network access:
+
+```bash
+docker run --rm --network none \
+  --user "$(id -u):$(id -g)" \
+  rwun-artifact:2026 \
+  python run_evaluation.py 0
+```
+
+Mode `0` runs four data-independent smoke tests in under one minute. Expect
+`Ran 4 tests ... OK`. It does not read `evaluation_results/` or generate
+experiment data.
+
+Qiskit may print `Bit.register` and `Bit.index` deprecation warnings. These are
+expected with the pinned versions. PDF bytes may differ because of metadata;
+compare page counts, values, and trends rather than checksums.
+
+## Fresh Experiments
+
+`run_evaluation.py` is the only reviewer entry point:
+
+| Mode | Purpose | Output | Reference time |
+| ---: | --- | --- | --- |
+| `0` | Data-independent smoke tests | None | Under 1 minute |
+| `1` | Recompute Table 1 | `evaluation/` | Several hours |
+| `2` | Quick random evaluation, 10 circuits per point | `evaluation/quick/` | About 6 minutes |
+| `3` | Full random evaluation, 100 circuits per point | `evaluation/full/` | Several hours |
+
+For example, retain a fresh quick run with:
+
+```bash
+mkdir -p evaluation
+docker run --rm --network none \
+  --user "$(id -u):$(id -g)" \
+  --volume "$PWD/evaluation:/artifact/evaluation" \
+  rwun-artifact:2026 \
+  python run_evaluation.py 2
+```
+
+The non-Q-free phase may print `Could not find path from to in var compuation`
+for unsupported random circuits. This is non-fatal if the command exits with
+status 0 and produces both PDFs.
+
+Mode `2` generates new circuits, measurements, and PDFs without reading
+`evaluation_results/`. The bundled directory is only a reference baseline for
+comparison with the paper; mode `3` reproduces the full random experiment.
+
+Table 1 records the largest scale completing within 30 seconds, so boundaries
+may vary by machine. `1000+` means the sweep stopped at 1000, `X` means no
+successful scale, and `n*` marks a Reqomp recursion-depth limit.
+
+## Paper Claims
+
+| Evidence | Output | Reviewer check |
+| --- | --- | --- |
+| Table 1 scalability and Aw-Dep | `table1_merged.md` | Inspect bold best scales and Aw-Dep ordering |
+| Q-free success and cycle breakdown | `qfree_metrics.pdf` | Compare RwUn and Reqomp across all four pages |
+| Non-Q-free success | `success_quan.pdf` | Compare the three circuit widths |
+| Clean-uncomputation correctness | Mode `0` smoke tests | Confirm all four tests pass |
+
+Runtime measurements are not expected to be identical across machines.
+
+## Native Alternative
+
+```bash
+conda create --name rwun --yes python=3.10.18 pip=25.1
 conda activate rwun
-cd Reqomp-master
-pip install .
-
-### Organization
-
-The RwUn implementation is made up of the files in the folder [RwUn](/RwUn/).
-
-All examples presented in the submitted paper can be found in [RwUn/examples](RwUn/examples).
-
-### Paper Claims
-
-To get the result of Table 2, run:
+python -m pip install --requirement requirements-lock.txt
+python -m pip install --no-deps ./Reqomp-master
+python -m pip install --no-deps .
+MPLBACKEND=Agg python run_evaluation.py 0
 ```
-python run_evaluation.py 0
-```
-This may require minutes and will write two files of results to evaluation folder: dependency_result and table1_result.
 
-To get the result of Fig 11, run and wait for minutes:
-```
-python run_evaluation.py 1
-```
-This may require minutes and will store randomly generated circuit, evaluation results on these circuits and *.pdf corresponds to the result.
+## Reuse
 
-To get the result of Fig 10, run:
-```
-python run_evaluation.py 2
-```
-This may require hours and the result is similar with above.
+- `RwUn.uncomp.uncompute(circuit, mode)` runs modes 0 through 3.
+- `RwUn.dependencygraph.dep_cyc(circuit)` computes Aw-Dep and cycle data.
+- New circuits must use Qiskit `AncillaRegister` objects for ancilla wires.
+
+The validated environment is limited to Python 3.10, Qiskit Terra 0.22.0, Linux
+amd64, and three-process local benchmark execution.

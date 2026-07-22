@@ -31,21 +31,21 @@ Adder(100)
 $\SD{199}{100}$
 (1, 0)
 
-ConditionalMCX(52, dirty=False)
-$\SD{14}{6}$
-(2, 0)
+ConditionalMCS(52, dirty=False)
+$\SD{19}{8}$
+(6, 0)
 
-ConditionalMCX(52, dirty=True)
-$\SD{27}{11}$
-(2, 0)
+ConditionalMCS(52, dirty=True)
+$\SD{32}{13}$
+(11, 0)
 
-RiseConditionalMCX(51, dirty=False)
-$\SD{194}{100}$
-(3, 0)
+RiseConditionalMCS(51, dirty=False)
+$\SD{199}{100}$
+(5, 0)
 
-RiseConditionalMCX(27, dirty=True)
-$\SD{195}{103}$
-(3, 0)
+RiseConditionalMCS(27, dirty=True)
+$\SD{200}{103}$
+(7, 0)
 
 IntegerComparator(58, dirty=True)
 $\SD{200}{172}$

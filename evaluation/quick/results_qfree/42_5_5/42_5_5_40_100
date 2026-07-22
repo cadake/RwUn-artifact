@@ -1,0 +1,28 @@
+{
+  "config": {
+    "seed": 42,
+    "n_qubits": 5,
+    "n_ancillas": 5,
+    "n_gates": 40,
+    "n_circuits": 100,
+    "folder": "evaluation/quick"
+  },
+  "results": {
+    "s1": 0.39,
+    "s2": 0.0,
+    "t1": 0.16833183092948717,
+    "t2": 0,
+    "dep": 12.1,
+    "cyc": 0.92,
+    "s1_only": 39,
+    "s2_only": 0,
+    "dep_both_success": 0,
+    "cyc_both_success": 0,
+    "dep_1_success": 9.76923076923077,
+    "cyc_1_success": 0.7948717948717948,
+    "s1_no_cyc": 1.0,
+    "s2_no_cyc": 0.0,
+    "s1_cyc": 0.33695652173913043,
+    "s2_cyc": 0.0
+  }
+}

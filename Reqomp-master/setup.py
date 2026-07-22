@@ -10,9 +10,9 @@ setuptools.setup(
     long_description=long_description,
     long_description_content_type="text/markdown",
     packages=setuptools.find_packages(),
-    python_requires='>=3.6',
+    python_requires='>=3.10,<3.11',
 	install_requires=[
-		'qiskit==0.39.0', 
+		'qiskit-terra==0.22.0',
 		'numpy==1.23.1', 
         'matplotlib==3.6.2'
 	]

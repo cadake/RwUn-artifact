@@ -2,6 +2,7 @@ import os
 import json
 from pathlib import Path
 import matplotlib.pyplot as plt
+from matplotlib.backends.backend_pdf import PdfPages
 
 
 def load_results(folder: str, wanted_fields=None):
@@ -64,6 +65,7 @@ def plot_gatecount_two_curves_panels(
     share_y=True,
     pad_ratio=0.05,
     grid=True,
+    _pdf_pages=None,
 ):
     assert len(folders) == 3
     assert len(width_labels) == 3
@@ -153,8 +155,31 @@ def plot_gatecount_two_curves_panels(
         fig.legend(handles, labels, loc="upper center", ncol=2, frameon=True,
                    bbox_to_anchor=(0.35, 1.05))
 
-    Path(out_path).parent.mkdir(parents=True, exist_ok=True)
-    plt.savefig(out_path, dpi=300, bbox_inches="tight")
-    plt.close()
-    print(f"saved: {out_path}")
+    if _pdf_pages is None:
+        Path(out_path).parent.mkdir(parents=True, exist_ok=True)
+        fig.savefig(out_path, dpi=300, bbox_inches="tight")
+        print(f"saved: {out_path}")
+    else:
+        _pdf_pages.savefig(fig, dpi=300, bbox_inches="tight")
+    plt.close(fig)
 
+
+def plot_gatecount_two_curves_pages(
+    folders,
+    width_labels,
+    page_specs,
+    out_path="figures/gatecnt_metrics.pdf",
+):
+    if not page_specs:
+        raise ValueError("page_specs must contain at least one plot configuration")
+
+    Path(out_path).parent.mkdir(parents=True, exist_ok=True)
+    with PdfPages(out_path) as pdf_pages:
+        for page_spec in page_specs:
+            plot_gatecount_two_curves_panels(
+                folders=folders,
+                width_labels=width_labels,
+                _pdf_pages=pdf_pages,
+                **page_spec,
+            )
+    print(f"saved: {out_path}")

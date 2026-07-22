@@ -1,3 +1,4 @@
+LICENSE
 README.md
 pyproject.toml
 ./RwUn/__init__.py
@@ -5,8 +6,6 @@ pyproject.toml
 ./RwUn/evaluation_plot.py
 ./RwUn/evaluation_utils.py
 ./RwUn/optimizer.py
-./RwUn/run_evaluation1.py
-./RwUn/run_evaluation2.py
 ./RwUn/symbolic.py
 ./RwUn/uncomp.py
 ./RwUn/uncomputability.py
@@ -23,8 +22,6 @@ RwUn/dependencygraph.py
 RwUn/evaluation_plot.py
 RwUn/evaluation_utils.py
 RwUn/optimizer.py
-RwUn/run_evaluation1.py
-RwUn/run_evaluation2.py
 RwUn/symbolic.py
 RwUn/uncomp.py
 RwUn/uncomputability.py

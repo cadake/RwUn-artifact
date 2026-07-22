@@ -70,7 +70,7 @@
 
 
 from qiskit.circuit import QuantumCircuit, Instruction
-from uncomputability import *
+from .uncomputability import *
 
 X_FAMILY = {"x", "cx", "ccx", "mcx"}
 PHASE_FAMILY = {"z", "s", "sdg", "t", "tdg"}
@@ -221,4 +221,3 @@ def k_local_commute_optimize2(data_list):
         if canceled[i]:
             data_list.remove(head)
         head = next_
-

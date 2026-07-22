@@ -295,6 +295,7 @@ def random_test(config: ExperimentConfig, qfree, all_uncomputable=True):
 
 
 def evaluate(qfree, mode=0, folder="evaluation", all_uncomputable=True, quick=False):
+    # n_circs = 10 if quick else 100
     n_circs = 100
 
     # 10 width and 5~60 gates
@@ -302,19 +303,19 @@ def evaluate(qfree, mode=0, folder="evaluation", all_uncomputable=True, quick=Fa
         n_qubs, n_ancs = 5, 5
         begin, end, step = 5, 56, 5
         if quick:
-            end = 50
+            end = 56
     # 80 width and 50~200 gates
     elif mode == 1:
         n_qubs, n_ancs = 40, 40
         begin, end, step = 50, 141, 10
         if quick:
-            end = 101
+            end = 131
     # 400 width and 50~200 gates
     elif mode == 2:
         n_qubs, n_ancs = 200, 200
         begin, end, step = 50, 501, 50    
         if quick:
-            end = 101
+            end = 351
     else:
         pass
 
@@ -354,7 +355,7 @@ def plot_results(folder):
             data = json.load(f)
             config = data["config"]
             results = data["results"]
-            
+
             gate_counts.append(config["n_gates"])
             my_success_rates.append(results[0])
             other_success_rates.append(results[1])
@@ -384,4 +385,3 @@ def plot_results(folder):
     plt.legend()
     plt.grid(True)
     plt.show()
-            

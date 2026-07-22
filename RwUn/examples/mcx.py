@@ -186,3 +186,8 @@ def makeRiseConditionalMCS(n, dirty=False):
     circuit.cx(a[1], t[0])
 
     return circuit
+
+
+# Keep the spelling used by the evaluation helpers.
+makeConditionalMCX = makeConditionalMCS
+makeRiseConditionalMCX = makeRiseConditionalMCS

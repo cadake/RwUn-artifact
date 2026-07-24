@@ -294,28 +294,19 @@ def run_table1():
     lines.append(test_adder_efficiency(3, 4, 7, 1))
     lines.append(test_adder_efficiency(4, 130, 200, 10))
 
+    lines.append("riseconditionalclean mcs:")
+    lines.append(test_riseconditionalcleanmcx_efficiency(0, 8, 14, 1))
+    lines.append(test_riseconditionalcleanmcx_efficiency(1, 6, 12, 1))
+    lines.append(test_riseconditionalcleanmcx_efficiency(2, 6, 12, 1))
+    lines.append(test_riseconditionalcleanmcx_efficiency(3, 6, 12, 1))
+    lines.append(test_riseconditionalcleanmcx_efficiency(4, 10, 11, 1))
+
     lines.append("conditionalclean mcs:")
     lines.append(test_conditionalcleanmcx_efficiency(0, 1000, 1001, 10))
     lines.append(test_conditionalcleanmcx_efficiency(1, 1000, 1001, 10))
     lines.append(test_conditionalcleanmcx_efficiency(2, 1000, 1001, 10))
     lines.append(test_conditionalcleanmcx_efficiency(3, 1000, 1001, 10))
-    lines.append(test_conditionalcleanmcx_efficiency(4, 10, 41, 10))
-
-
-    lines.append("conditionaldirty mcs:")
-    lines.append(test_conditionaldirtymcx_efficiency(0, 1000, 1001, 10))
-    lines.append(test_conditionaldirtymcx_efficiency(1, 1000, 1001, 10))
-    lines.append(test_conditionaldirtymcx_efficiency(2, 1000, 1001, 10))
-    lines.append(test_conditionaldirtymcx_efficiency(3, 1000, 1001, 10))
-    lines.append(test_conditionaldirtymcx_efficiency(4, 10, 41, 10))
-
-
-    lines.append("riseconditionalclean mcs:")
-    lines.append(test_riseconditionalcleanmcx_efficiency(0, 10, 14, 1))
-    lines.append(test_riseconditionalcleanmcx_efficiency(1, 8, 12, 1))
-    lines.append(test_riseconditionalcleanmcx_efficiency(2, 8, 12, 1))
-    lines.append(test_riseconditionalcleanmcx_efficiency(3, 8, 12, 1))
-    lines.append(test_riseconditionalcleanmcx_efficiency(4, 900, 970, 10))
+    lines.append(test_conditionalcleanmcx_efficiency(4, 10, 11, 1))
 
 
     lines.append("riseconditionaldirty mcs:")
@@ -323,7 +314,21 @@ def run_table1():
     lines.append(test_riseconditionaldirtymcx_efficiency(1, 7, 8, 1))
     lines.append(test_riseconditionaldirtymcx_efficiency(2, 7, 8, 1))
     lines.append(test_riseconditionaldirtymcx_efficiency(3, 7, 8, 1))
-    lines.append(test_riseconditionaldirtymcx_efficiency(4, 740, 940, 20))
+    lines.append(test_riseconditionaldirtymcx_efficiency(4, 10, 11, 1))
+
+
+    lines.append("conditionaldirty mcs:")
+    lines.append(test_conditionaldirtymcx_efficiency(0, 1000, 1001, 10))
+    lines.append(test_conditionaldirtymcx_efficiency(1, 1000, 1001, 10))
+    lines.append(test_conditionaldirtymcx_efficiency(2, 1000, 1001, 10))
+    lines.append(test_conditionaldirtymcx_efficiency(3, 1000, 1001, 10))
+    lines.append(test_conditionaldirtymcx_efficiency(4, 10, 11, 1))
+
+
+    
+
+
+    
 
 
     lines.append("dirty intercomparator:")
@@ -348,7 +353,7 @@ def run_table1():
 
 
     lines.append("dirty adder:")
-    lines.append(test_dirtyadder_efficiency(0, 6, 7, 1))
+    lines.append(test_dirtyadder_efficiency(0, 5, 7, 1))
     lines.append(test_dirtyadder_efficiency(1, 5, 6, 1))
     lines.append(test_dirtyadder_efficiency(2, 5, 6, 1))
     lines.append(test_dirtyadder_efficiency(3, 9, 10, 1))

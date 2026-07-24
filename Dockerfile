@@ -1,8 +1,9 @@
-FROM python:3.10.18-slim-bookworm AS builder
+ARG PYTHON_IMAGE=python:3.10.18-slim-bookworm
+
+FROM ${PYTHON_IMAGE} AS builder
 
 ENV PIP_DISABLE_PIP_VERSION_CHECK=1 \
     PIP_DEFAULT_TIMEOUT=100 \
-    PIP_NO_CACHE_DIR=1 \
     PIP_RESUME_RETRIES=10 \
     PIP_RETRIES=10 \
     PYTHONDONTWRITEBYTECODE=1
@@ -12,17 +13,23 @@ RUN apt-get update \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /artifact
-COPY requirements-lock.txt pyproject.toml README.md LICENSE ./
+COPY requirements-lock.txt build-constraints.txt ./
+
+RUN --mount=type=cache,target=/root/.cache/pip,sharing=locked \
+    find /usr/local/lib/python3.10/site-packages -name '*.pyc' -delete \
+    && python -m pip install --upgrade pip==25.1 \
+    && PIP_CONSTRAINT=/artifact/build-constraints.txt \
+        python -m pip wheel --wheel-dir /wheels --requirement requirements-lock.txt
+
+COPY pyproject.toml README.md LICENSE ./
 COPY Reqomp-master ./Reqomp-master
 COPY RwUn ./RwUn
 
-RUN find /usr/local/lib/python3.10/site-packages -name '*.pyc' -delete \
-    && python -m pip install --upgrade pip==25.1 \
-    && python -m pip wheel --wheel-dir /wheels --requirement requirements-lock.txt \
-    && python -m pip wheel --wheel-dir /wheels --no-deps ./Reqomp-master .
+RUN --mount=type=cache,target=/root/.cache/pip,sharing=locked \
+    python -m pip wheel --wheel-dir /wheels --no-deps ./Reqomp-master .
 
 
-FROM python:3.10.18-slim-bookworm
+FROM ${PYTHON_IMAGE}
 
 LABEL org.opencontainers.image.title="RwUn OOPSLA 2026 artifact" \
       org.opencontainers.image.description="Reproduction package for RwUn ancilla uncomputation" \

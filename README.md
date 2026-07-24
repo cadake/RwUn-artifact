@@ -34,18 +34,22 @@ Actual runtimes may vary across machines.
 
 ### Install
 
-Docker is the recommended way to evaluate the artifact. The supplied
-image was validated on Linux amd64 with Docker 28.5.2. ARM-based
-containers have not been validated.
+Docker is the recommended way to evaluate the artifact.
 
 
 ##### Option A: Load the Prebuilt Image
 
-The artifact includes a prebuilt Linux amd64 image. To load it, run:
+The artifact includes separate prebuilt images for amd64 and arm64. Select and load the image matching the host:
 
 ```bash
-gzip --decompress --stdout dist/rwun-artifact-image-linux-amd64.tar.gz \
-  | docker load
+case "$(uname -m)" in
+  x86_64|amd64) image_arch=amd64 ;;
+  arm64|aarch64) image_arch=arm64 ;;
+  *) echo "Unsupported architecture: $(uname -m)" >&2; exit 1 ;;
+esac
+
+gzip --decompress --stdout \
+  "dist/rwun-artifact-image-linux-${image_arch}.tar.gz" | docker load
 ```
 
 ##### Option B: Build the Image
@@ -129,7 +133,7 @@ And the main result files will be:
 
 | Evalutaion target (Applicability and Scalability)                             | Paper reference |  mode | Generated evidence                  | Reviewer check                          |
 | --------------------------------------- | -------------- | --------------: | ----------------------------------- | --------------------------------------- |
-| Practical benchmark          | [refer-table1](paper_data/table1.png)(Table 1, Section 7.2)        |             `1` |`evaluation/table1_merged.md`  | The positions marked with `X`, indicating failures, should match exactly between the two tables. Each numerical entry is the largest scale that can be completed within 30 seconds. The numerical values should be broadly similar, but some differences are expected because runtime depends on the machine.                              |
+| Practical benchmark          | [refer-table1](paper_data/table1.png)(Table 1, Section 7.2)        |             `1` |`evaluation/table1_merged.md`  | The positions marked with `X`, indicating failures, should match exactly between the two tables. A small number of additional `X` entries are considered acceptable, as the machine timed out on some of the configured minimum-size instances. To reduce the overall testing time, we did not always begin with the smallest instance size. Each numerical entry is the largest scale that can be completed within 30 seconds. The numerical values should be broadly similar, but some differences are expected because runtime depends on the machine.                              |
 |  Random qfree circuits | [refer-qfree](paper_data/qfree.png)(Fig. 10, Section 7.2)    |      `2/3` | `qfree_metrics.pdf` | Reproduces the referrenced figure, except that mode `2` omits the final few data points.        |
 | Random quantum circuits                 | [refer-quan](paper_data/quan.png)(Fig. 11, Section 7.2)    |      `2/3` | `success_quan.pdf`  | Reproduces the referrenced figure, except that mode `2` omits the final few data points.  |
 
@@ -226,7 +230,6 @@ Then run:
 python run_evaluation.py 1
 python run_evaluation.py 3
 ```
-
 
 
 

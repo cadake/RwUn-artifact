@@ -1,0 +1,4 @@
+# Tweedledum 1.1.1 uses setup.py metadata that Setuptools 61+ rejects.
+setuptools==59.8.0
+# Its vendored pybind11 also requires CMake's pre-4.0 compatibility mode.
+cmake==3.31.6

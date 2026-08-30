@@ -14,19 +14,13 @@ def makesIncrementer(num_qubits, dirty=False):
     a = AncillaRegister(num_qubits - 2, 'a')
     circuit = QuantumCircuit(x, a)
     if not dirty:
-        for i in range(num_qubits - 2):
-            circuit.ccx(x[i], x[i+1], a[i])
+        circuit.ccx(x[0], x[1], a[0])
+        for i in range(num_qubits - 3):
+            circuit.ccx(a[i], x[i+2], a[i+1])
         for i in range(num_qubits - 3, -1, -1):
             circuit.cx(a[i], x[i+2])
         circuit.cx(x[0], x[1])
         circuit.x(x[0])
-        # circuit.ccx(x[0], x[1], a[0])
-        # circuit.cx(x[0], x[1])
-        # circuit.x(x[0])
-        # for i in range(1, num_qubits - 2):
-        #     circuit.ccx(a[i - 1], x[i + 1], a[i])
-        #     circuit.cx(a[i - 1], x[i + 1])
-        # circuit.cx(a[num_qubits - 3], x[num_qubits - 1])
     else:
         for n in range(num_qubits, 2, -1):
             circuit.cx(a[n - 3], x[n - 1])

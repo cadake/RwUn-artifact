@@ -9,7 +9,7 @@ This artifact contains the RwUn implementation, circuit examples, the vendored R
 | `RwUn/` | RwUn implementation and circuit examples |
 | `Reqomp-master/` | Vendored Reqomp baseline |
 | `run_evaluation.py` | Entry point for smoke tests and evaluation |
-| `dist/` | Prebuilt Docker image and checksum files |
+| `dist/` | Prebuilt Docker images and checksums, when included in a release bundle |
 | `paper_data/` | Reference table and plots reported in the paper |
 
 The evaluation script supports the following modes:
@@ -29,6 +29,7 @@ All runtimes reported above were measured on:
 - Docker version: 28.5.2
 
 Actual runtimes may vary across machines.
+The evaluation entry point sets the Python recursion limit to 100000 in all experiment processes. Reqomp runs on a thread with a 256 MiB stack.
 
 ## Kick the Tires
 
@@ -39,7 +40,7 @@ Docker is the recommended way to evaluate the artifact.
 
 ##### Option A: Load the Prebuilt Image
 
-The artifact includes separate prebuilt images for amd64 and arm64. Select and load the image matching the host:
+If the release bundle includes prebuilt images in `dist/`, select and load the image matching the host. For a source-only checkout, use Option B or the native installation instructions below.
 
 ```bash
 case "$(uname -m)" in
@@ -70,7 +71,7 @@ docker run --rm --network none \
   rwun-artifact:2026 \
   python run_evaluation.py 0
 ```
-Expect `Ran 2 tests ... OK` in under one minute.
+Expect `Ran 4 tests ... OK` in under one minute.
 
 
 ## Evaluation
@@ -95,7 +96,7 @@ evaluation/table1_merged.md
 
 ##### Quick Random Evaluation
 
-To recompute the randomized qfree and quantum results reported in [refer-qfree](paper_data/qfree.png) (Fig. 10, Section 7.2) and [refer-quan](paper_data/quan.png) (Fig. 11, Section 7.2), we recommond running quick evaluation with mode `2`:
+To recompute the randomized qfree and quantum results reported in [refer-qfree](paper_data/qfree.png) (Fig. 10, Section 7.2) and [refer-quan](paper_data/quan.png) (Fig. 11, Section 7.2), we recommend running quick evaluation with mode `2`:
 
 ```bash
 docker run --rm --network none \
@@ -111,7 +112,7 @@ evaluation/quick/qfree_metrics.pdf
 evaluation/quick/success_quan.pdf
 ```
 
-Mode `2` uses the same generators, algorithms, and random seed as the paper evaluation. It just does not run last several points of big scale.
+Mode `2` uses the same generators, algorithms, random seed, and 100 circuits per point as mode `3`. It omits the medium-width 140-gate point and the large-width 400-, 450-, and 500-gate points for both circuit families.
 
 ##### Optional Full Random Evaluation
 
@@ -131,21 +132,20 @@ And the main result files will be:
 
 ## Paper Claims and Supporting Evidence
 
-| Evalutaion target (Applicability and Scalability)                             | Paper reference |  mode | Generated evidence                  | Reviewer check                          |
+| Evaluation target (Applicability and Scalability)                             | Paper reference |  mode | Generated evidence                  | Reviewer check                          |
 | --------------------------------------- | -------------- | --------------: | ----------------------------------- | --------------------------------------- |
-| Practical benchmark          | [refer-table1](paper_data/table1.png)(Table 1, Section 7.2)        |             `1` |`evaluation/table1_merged.md`  | The positions marked with `X`, indicating failures, should match exactly between the two tables. A small number of additional `X` entries are considered acceptable, as the machine timed out on some of the configured minimum-size instances. To reduce the overall testing time, we did not always begin with the smallest instance size. Each numerical entry is the largest scale that can be completed within 30 seconds. The numerical values should be broadly similar, but some differences are expected because runtime depends on the machine.                              |
-|  Random qfree circuits | [refer-qfree](paper_data/qfree.png)(Fig. 10, Section 7.2)    |      `2/3` | `qfree_metrics.pdf` | Reproduces the referrenced figure, except that mode `2` omits the final few data points.        |
-| Random quantum circuits                 | [refer-quan](paper_data/quan.png)(Fig. 11, Section 7.2)    |      `2/3` | `success_quan.pdf`  | Reproduces the referrenced figure, except that mode `2` omits the final few data points.  |
+| Practical benchmark          | [refer-table1](paper_data/table1.png)(Table 1, Section 7.2)        |             `1` |`evaluation/table1_merged.md`  | Each numerical entry is the largest successful scale tested by a fixed-step search with n <= 1000 and a 30-second uncomputation budget. The search moves downward if the initial scale fails and continues upward beyond the preset range while attempts succeed. `X` means no successful tested scale was recorded, or the method was not tested. Results may vary across machines. |
+|  Random qfree circuits | [refer-qfree](paper_data/qfree.png)(Fig. 10, Section 7.2)    |      `2/3` | `qfree_metrics.pdf` | Reproduces the referenced figure, except that mode `2` omits the final few data points.        |
+| Random quantum circuits                 | [refer-quan](paper_data/quan.png)(Fig. 11, Section 7.2)    |      `2/3` | `success_quan.pdf`  | Reproduces the referenced figure, except that mode `2` omits the final few data points.  |
 
-Evaluaion modes 2 and 3 use random seed 42, matching the paper evaluation. This fixes the generated benchmark instances.
+Evaluation modes 2 and 3 use random seed 42. Each batch contains 100 circuits, generated anew and saved as QPY files. Conditional metrics for empty subgroups are omitted from the plots.
 
 
 
 
 ## Native Installation
 
-Docker is recommended for artifact evaluation. The following native
-installation is provided for users who want to use RwUn directly.
+The following instructions support Linux servers with Conda. Run all commands from the project root directory.
 
 ### Install RwUn
 
@@ -156,9 +156,9 @@ conda create --name rwun --yes python=3.10.18 pip=25.1
 conda activate rwun
 ```
 
-Install the pinned dependencies and RwUn:
-```
-python -m pip install --requirement requirements-lock.txt
+Install the pinned dependencies and RwUn. Source builds of dependencies require a C/C++ compiler. The build constraints apply only to the dependency installation command:
+```bash
+PIP_CONSTRAINT="$PWD/build-constraints.txt" python -m pip install --requirement requirements-lock.txt
 python -m pip install --no-deps .
 ```
 
@@ -224,15 +224,18 @@ Reqomp baseline:
 
 ```bash
 python -m pip install --no-deps ./Reqomp-master
+python -m pip check
+
+export MPLBACKEND=Agg
+export PYTHONDONTWRITEBYTECODE=1
+python run_evaluation.py 0
 ```
-Then run:
+After the four checks pass, run the evaluations in sequence:
+```bash
+mkdir -p evaluation
+python -u run_evaluation.py 1 > evaluation/table1.log 2>&1
+python -u run_evaluation.py 3 > evaluation/full_random.log 2>&1
 ```
-python run_evaluation.py 1
-python run_evaluation.py 3
-```
 
-
-
-
-
+For long server runs, use a persistent terminal session such as tmux. Generated results use the same `evaluation/` paths as the Docker commands. The 30-second timeout applies to individual Table 1 uncomputation attempts; random evaluation has no per-circuit timeout.
 

@@ -1,6 +1,11 @@
-from RwUn.evaluation_utils import evaluate, quantum_to_ancilla_circuit
+import sys
+
+# Default budget, including imports in spawned random-evaluation workers.
+sys.setrecursionlimit(100000)
+
+from RwUn.evaluation_utils import evaluate, quantum_to_ancilla_circuit, uncompute_reqomp
 from RwUn.utils import *
-from RwUn.uncomp import uncompute
+from RwUn.uncomp import uncompute, flatten_if_allowed
 from multiprocessing import Process
 from qiskit import QuantumCircuit
 from qiskit.quantum_info import Statevector
@@ -12,28 +17,32 @@ from RwUn.examples.grover import *
 from RwUn.examples.incrementer import *
 from RwUn.examples.deutschjozsa import *
 from RwUn.examples.intergercomparator import *
-from RwUn.dependencygraph import dep_cyc
+from RwUn.examples.multiplier import *
+from RwUn.examples.weightedadder import *
+from RwUn.examples.piecewiselinrot import *
+from RwUn.examples.polynomialpaulirot import *
+from RwUn.dependencygraph import dep_cyc, ConverterDependencyGraph
 import argparse
 import ast
 import csv
 import os
-import sys
 import tempfile
 import unittest
 from pathlib import Path
 from unittest.mock import call, patch
 
 evaluation_folder = "evaluation"
+TABLE1_RECURSION_LIMIT = 100000
 
 TABLE1_ROW_SPECS = (
-    ("clean integercomparator", "Clean IntegerComparator", "controls", "IntegerComparator(200, dirty=False)"),
+    ("clean integercomparator", "Clean IntegerComparator", "controls", "IntegerComparator(61, dirty=False)"),
     ("clean mcx", "Clean MCX", "controls", "MCX(201, dirty=False)"),
     ("mcry(pi/2)", "MCRY(pi/2)", "controls", "MCRY(10)"),
     ("clean incrementer", "Clean Incrementer", "operand", "Incrementer(101, dirty=False)"),
     ("dj", "Deutsch-Jozsa", "controls", "DJ(66)"),
     ("grover", "Grover's algorithm", "controls", "GroverCircuit(6)"),
     ("dirty mcx", "Dirty MCX", "controls", "MCX(101, dirty=True)"),
-    ("clean adder", "Clean Adder", "per operand", "Adder(100)"),
+    ("clean adder", "Clean Adder", "per operand", "Adder(34)"),
     ("dirty intercomparator", "Dirty IntegerComparator", "controls", "IntegerComparator(58, dirty=True)"),
     ("highestbitconstadder", "HighestBitConstAdder", "operand", "DirtyHighestBitConstAdder(41)"),
     ("riseconditionalclean mcs", "RiseConditionalCleanMCS", "controls", "RiseConditionalMCS(51, dirty=False)"),
@@ -43,6 +52,10 @@ TABLE1_ROW_SPECS = (
     ("gidney's incrementer", "Gidney's Incrementer", "operand", "DirtyIncrementer(25)"),
     ("dirty adder", "Dirty Adder", "per operand", "DirtyAdder(9)"),
     ("dirty incrementer", "Dirty Incrementer", "operand", "Incrementer(15, dirty=True)"),
+    ("multiplier", "Multiplier", "per operand", "Multiplier(5)"),
+    ("piecewise_linear_rotation", "Piecewise Linear Rotation", "state qubits", "PiecewiseLinearRotation(2, seed=42)"),
+    ("polynomial_pauli_rotation", "Polynomial Pauli Rotation", "state qubits", "PolynomialPauliRotation(6, coeffs=[2]*6)"),
+    ("weighted_adder", "Weighted Adder", "state qubits", "WeightedAdder(11, seed=42)"),
 )
 
 
@@ -132,7 +145,7 @@ def merge_table1_results(table1_path, dependency_path, output_path=None):
     lines = [
         "# Table 1",
         "",
-        "Largest scale parameter (n) uncomputed within 30 seconds, sorted by Aw-Dep.",
+        "Largest tested scale parameter (n <= 1000) uncomputed within 30 seconds using a fixed-step search, sorted by Aw-Dep.",
         "",
         "| Circuit | Param (n) | Aw-Dep | RwUn Sequential | RwUn Reverse | RwUn Jointly | RwUn Lifetime | Reqomp |",
         "| --- | --- | ---: | ---: | ---: | ---: | ---: | ---: |",
@@ -144,8 +157,8 @@ def merge_table1_results(table1_path, dependency_path, output_path=None):
         "",
         "- Bold values are the largest successful scale in each row.",
         "- `1000+` means scaling stopped at n = 1000.",
-        "- `n*` means Reqomp hit the recursion-depth limit.",
-        "- `X` means that the method failed for the tested range.",
+        "- `n*` marks a recursion-depth failure during the search.",
+        "- `X` means no successful tested scale was recorded, or the method was not tested; it does not distinguish timeout from algorithm failure. See the run log for each attempt.",
         "- `(cycle)` marks an aw-cycle in the dependency graph.",
     ])
 
@@ -165,8 +178,14 @@ def alt10(n: int) -> int:
 def run_table1_dependency_complexity():
     lines = []
     lines.append("size, depth, dependency, cycle")
+    dependency_gates = (ConverterDependencyGraph.known_qfree_gates
+                        + ConverterDependencyGraph.known_non_qfree_gates)
 
     def record(circ_type: str, circ, label=None):
+        # Count the same primitive gates used by the dependency analyzer.
+        circ = flatten_if_allowed(circ, allowed_gates=dependency_gates)
+        if circ.size() > 200:
+            raise ValueError(f"{circ_type}: flattened size {circ.size()} exceeds 200")
         if label is not None:
             lines.append(str(label))
         lines.append(f"{circ_type}")
@@ -174,9 +193,9 @@ def run_table1_dependency_complexity():
         lines.append(str(dep_cyc(circ)))
         lines.append("")
 
-    v = alt10(200)
-    inc = makeIntegerComparator(200, v, dirty=False)
-    record("IntegerComparator(200, dirty=False)", inc)
+    v = alt10(61)
+    inc = makeIntegerComparator(61, v, dirty=False)
+    record("IntegerComparator(61, dirty=False)", inc)
 
     inc = makeMCX(201, dirty=False)
     record("MCX(201, dirty=False)", inc)
@@ -196,8 +215,8 @@ def run_table1_dependency_complexity():
     inc = makeMCX(101, dirty=True)
     record("MCX(101, dirty=True)", inc)
 
-    inc = makesAdder(100)
-    record("Adder(100)", inc)
+    inc = makesAdder(34)
+    record("Adder(34)", inc)
 
     inc = makeConditionalMCS(52, dirty=False)
     record("ConditionalMCS(52, dirty=False)", inc)
@@ -228,6 +247,14 @@ def run_table1_dependency_complexity():
     inc = makesIncrementer(15, dirty=True)
     record("Incrementer(15, dirty=True)", inc)
 
+    record("Multiplier(5)", makesMult(5))
+    record("PiecewiseLinearRotation(2, seed=42)",
+           makesPLR(2, *piecewise_rotation_parameters(2)))
+    record("PolynomialPauliRotation(6, coeffs=[2]*6)",
+           makesPolyPauliRot(6, [2] * 6))
+    record("WeightedAdder(11, seed=42)",
+           makeWeightedAdder(11, weighted_adder_weights(11)))
+
     os.makedirs(evaluation_folder, exist_ok=True)
     output_path = os.path.join(evaluation_folder, "dependency_result")
 
@@ -243,18 +270,18 @@ def run_table1():
     lines.append("")
 
     lines.append("clean integercomparator:")
-    lines.append(test_cleancomparator_efficiency(0, 10, 20, 10))
-    lines.append(test_cleancomparator_efficiency(1, 80, 110, 10))
-    lines.append(test_cleancomparator_efficiency(2, 20, 30, 10))
-    lines.append(test_cleancomparator_efficiency(3, 20, 30, 10))
-    lines.append(test_cleancomparator_efficiency(4, 140, 190, 10))
+    lines.append(test_cleancomparator_efficiency(0, 10, 30, 10))
+    lines.append(test_cleancomparator_efficiency(1, 160, 180, 10))
+    lines.append(test_cleancomparator_efficiency(2, 20, 40, 10))
+    lines.append(test_cleancomparator_efficiency(3, 20, 40, 10))
+    lines.append(test_cleancomparator_efficiency(4, 210, 230, 10))
 
     lines.append("clean mcx:")
-    lines.append(test_mcx_efficiency(0, 30, 40, 10))
-    lines.append(test_mcx_efficiency(1, 420, 470, 10))
-    lines.append(test_mcx_efficiency(2, 180, 230, 10))
+    lines.append(test_mcx_efficiency(0, 40, 60, 10))
+    lines.append(test_mcx_efficiency(1, 610, 630, 10))
+    lines.append(test_mcx_efficiency(2, 260, 280, 10))
     lines.append(test_mcx_efficiency(3, 1000, 1100, 50))
-    lines.append(test_mcx_efficiency(4, 140, 200, 10))
+    lines.append(test_mcx_efficiency(4, 210, 230, 10))
 
     lines.append("mcry(pi/2):")
     lines.append(test_mcry_efficiency(0, 1000, 1001, 50))
@@ -265,37 +292,37 @@ def run_table1():
 
 
     lines.append("clean incrementer:")
-    lines.append(test_incrementer_efficiency(0, 7, 8, 1))
-    lines.append(test_incrementer_efficiency(1, 60, 110, 10))
-    lines.append(test_incrementer_efficiency(2, 16, 17, 1))
-    lines.append(test_incrementer_efficiency(3, 700, 800, 50))
-    lines.append(test_incrementer_efficiency(4, 140, 200, 10))
+    lines.append(test_incrementer_efficiency(0, 10, 12, 1))
+    lines.append(test_incrementer_efficiency(1, 190, 210, 10))
+    lines.append(test_incrementer_efficiency(2, 103, 105, 1))
+    lines.append(test_incrementer_efficiency(3, 450, 550, 50))
+    lines.append(test_incrementer_efficiency(4, 210, 230, 10))
 
 
     lines.append("dj:")
     lines.append(test_DJ_efficiency(3, 1000, 1001, 50))
-    lines.append(test_DJ_efficiency(4, 120, 200, 10))
+    lines.append(test_DJ_efficiency(4, 210, 230, 10))
 
     lines.append("grover:")
-    lines.append(test_grover_efficiency(3, 15, 16, 1))
-    lines.append(test_grover_efficiency(4, 10, 14, 1))
+    lines.append(test_grover_efficiency(3, 16, 18, 1))
+    lines.append(test_grover_efficiency(4, 14, 16, 1))
 
     lines.append("dirty mcx:")
-    lines.append(test_dirtymcx_efficiency(0, 40, 90, 10))
-    lines.append(test_dirtymcx_efficiency(1, 40, 90, 10))
-    lines.append(test_dirtymcx_efficiency(2, 60, 120, 10))
+    lines.append(test_dirtymcx_efficiency(0, 90, 110, 10))
+    lines.append(test_dirtymcx_efficiency(1, 90, 110, 10))
+    lines.append(test_dirtymcx_efficiency(2, 130, 150, 10))
     lines.append(test_dirtymcx_efficiency(3, 1000, 1100, 50))
-    lines.append(test_dirtymcx_efficiency(4, 10, 70, 10))
+    lines.append(test_dirtymcx_efficiency(4, 1000, 1001, 10))
 
     lines.append("clean adder:")
-    lines.append(test_adder_efficiency(0, 6, 7, 1))
-    lines.append(test_adder_efficiency(1, 70, 80, 10))
-    lines.append(test_adder_efficiency(2, 9, 10, 1))
-    lines.append(test_adder_efficiency(3, 4, 7, 1))
-    lines.append(test_adder_efficiency(4, 130, 200, 10))
+    lines.append(test_adder_efficiency(0, 6, 8, 1))
+    lines.append(test_adder_efficiency(1, 120, 140, 10))
+    lines.append(test_adder_efficiency(2, 10, 12, 1))
+    lines.append(test_adder_efficiency(3, 6, 8, 1))
+    lines.append(test_adder_efficiency(4, 210, 230, 10))
 
     lines.append("riseconditionalclean mcs:")
-    lines.append(test_riseconditionalcleanmcx_efficiency(0, 8, 14, 1))
+    lines.append(test_riseconditionalcleanmcx_efficiency(0, 13, 15, 1))
     lines.append(test_riseconditionalcleanmcx_efficiency(1, 6, 12, 1))
     lines.append(test_riseconditionalcleanmcx_efficiency(2, 6, 12, 1))
     lines.append(test_riseconditionalcleanmcx_efficiency(3, 6, 12, 1))
@@ -310,10 +337,10 @@ def run_table1():
 
 
     lines.append("riseconditionaldirty mcs:")
-    lines.append(test_riseconditionaldirtymcx_efficiency(0, 7, 8, 1))
-    lines.append(test_riseconditionaldirtymcx_efficiency(1, 7, 8, 1))
-    lines.append(test_riseconditionaldirtymcx_efficiency(2, 7, 8, 1))
-    lines.append(test_riseconditionaldirtymcx_efficiency(3, 7, 8, 1))
+    lines.append(test_riseconditionaldirtymcx_efficiency(0, 7, 9, 1))
+    lines.append(test_riseconditionaldirtymcx_efficiency(1, 7, 9, 1))
+    lines.append(test_riseconditionaldirtymcx_efficiency(2, 7, 9, 1))
+    lines.append(test_riseconditionaldirtymcx_efficiency(3, 9, 11, 1))
     lines.append(test_riseconditionaldirtymcx_efficiency(4, 10, 11, 1))
 
 
@@ -332,41 +359,69 @@ def run_table1():
 
 
     lines.append("dirty intercomparator:")
-    lines.append(test_dirtycomparator_efficiency(0, 13, 14, 1))
-    lines.append(test_dirtycomparator_efficiency(1, 13, 14, 1))
-    lines.append(test_dirtycomparator_efficiency(2, 19, 20, 1))
-    lines.append(test_dirtycomparator_efficiency(3, 15, 16, 1))
-    lines.append(test_dirtycomparator_efficiency(4, 10, 60, 10))
+    lines.append(test_dirtycomparator_efficiency(0, 15, 17, 1))
+    lines.append(test_dirtycomparator_efficiency(1, 13, 15, 1))
+    lines.append(test_dirtycomparator_efficiency(2, 21, 23, 1))
+    lines.append(test_dirtycomparator_efficiency(3, 17, 19, 1))
+    lines.append(test_dirtycomparator_efficiency(4, 1000, 1001, 10))
 
 
     lines.append("highestbitconstadder:")
-    lines.append(test_hbadder_efficiency(0, 6, 10, 1))
-    lines.append(test_hbadder_efficiency(1, 6, 10, 1))
-    lines.append(test_hbadder_efficiency(2, 7, 13, 1))
-    lines.append(test_hbadder_efficiency(3, 7, 11, 1))
-    lines.append(test_hbadder_efficiency(4, 10, 70, 10))
+    lines.append(test_hbadder_efficiency(0, 9, 11, 1))
+    lines.append(test_hbadder_efficiency(1, 9, 11, 1))
+    lines.append(test_hbadder_efficiency(2, 13, 15, 1))
+    lines.append(test_hbadder_efficiency(3, 10, 12, 1))
+    lines.append(test_hbadder_efficiency(4, 1000, 1001, 10))
 
 
     lines.append("gidney's incrementer:")
-    lines.append(test_gidneydirtyincrementer_efficiency(2, 35, 41, 1))
+    lines.append(test_gidneydirtyincrementer_efficiency(2, 48, 50, 1))
     lines.append(test_gidneydirtyincrementer_efficiency(4, 4, 10, 1))
 
 
     lines.append("dirty adder:")
-    lines.append(test_dirtyadder_efficiency(0, 5, 7, 1))
-    lines.append(test_dirtyadder_efficiency(1, 5, 6, 1))
-    lines.append(test_dirtyadder_efficiency(2, 5, 6, 1))
-    lines.append(test_dirtyadder_efficiency(3, 9, 10, 1))
+    lines.append(test_dirtyadder_efficiency(0, 6, 8, 1))
+    lines.append(test_dirtyadder_efficiency(1, 6, 8, 1))
+    lines.append(test_dirtyadder_efficiency(2, 5, 7, 1))
+    lines.append(test_dirtyadder_efficiency(3, 10, 12, 1))
     lines.append(test_dirtyadder_efficiency(4, 4, 10, 1))
 
 
     lines.append("dirty incrementer:")
-    lines.append(test_dirtyincrementer_efficiency(0, 9, 10, 1))
-    lines.append(test_dirtyincrementer_efficiency(1, 9, 10, 1))
-    lines.append(test_dirtyincrementer_efficiency(2, 9, 10, 1))
-    lines.append(test_dirtyincrementer_efficiency(3, 50, 60, 10))
+    lines.append(test_dirtyincrementer_efficiency(0, 10, 12, 1))
+    lines.append(test_dirtyincrementer_efficiency(1, 10, 12, 1))
+    lines.append(test_dirtyincrementer_efficiency(2, 10, 12, 1))
+    lines.append(test_dirtyincrementer_efficiency(3, 100, 120, 10))
     lines.append(test_dirtyincrementer_efficiency(4, 10, 60, 10))
 
+
+    lines.append("multiplier:")
+    lines.append(test_multiplier_efficiency(0, 3, 5, 1))
+    lines.append(test_multiplier_efficiency(1, 3, 5, 1))
+    lines.append(test_multiplier_efficiency(2, 3, 5, 1))
+    lines.append(test_multiplier_efficiency(3, 6, 8, 1))
+    lines.append(test_multiplier_efficiency(4, 43, 45, 1))
+
+    lines.append("piecewise_linear_rotation:")
+    lines.append(test_piecewiselinrot_efficiency(0, 2, 3, 1))
+    lines.append(test_piecewiselinrot_efficiency(1, 2, 3, 1))
+    lines.append(test_piecewiselinrot_efficiency(2, 2, 3, 1))
+    lines.append(test_piecewiselinrot_efficiency(3, 2, 3, 1))
+    lines.append(test_piecewiselinrot_efficiency(4, 10, 12, 1))
+
+    lines.append("polynomial_pauli_rotation:")
+    lines.append(test_polynomialpaulirot_efficiency(0, 3, 4, 1))
+    lines.append(test_polynomialpaulirot_efficiency(1, 3, 4, 1))
+    lines.append(test_polynomialpaulirot_efficiency(2, 3, 4, 1))
+    lines.append(test_polynomialpaulirot_efficiency(3, 3, 4, 1))
+    lines.append(test_polynomialpaulirot_efficiency(4, 10, 12, 1))
+
+    lines.append("weighted_adder:")
+    lines.append(test_weightedadder_efficiency(0, 3, 5, 1))
+    lines.append(test_weightedadder_efficiency(1, 3, 5, 1))
+    lines.append(test_weightedadder_efficiency(2, 3, 5, 1))
+    lines.append(test_weightedadder_efficiency(3, 90, 96, 1))
+    lines.append(test_weightedadder_efficiency(4, 265, 267, 1))
 
     os.makedirs(evaluation_folder, exist_ok=True)
     output_path = os.path.join(evaluation_folder, "table1_result")
@@ -385,10 +440,10 @@ def run_table1():
 def run_random(qfree, quick=False, output_folder=None):
     output_folder = str(output_folder or evaluation_folder)
 
-    def run(i: int):
-        evaluate(qfree, i, output_folder, True, quick=quick)
-
-    ps = [Process(target=run, args=(i,)) for i in (0, 1, 2)]
+    ps = [
+        Process(target=evaluate, args=(qfree, i, output_folder, True), kwargs={"quick": quick})
+        for i in (0, 1, 2)
+    ]
     for p in ps: p.start()
     for p in ps: p.join()
     if any(p.exitcode != 0 for p in ps):
@@ -460,7 +515,7 @@ class ArtifactSmokeTests(unittest.TestCase):
         source = makeMCX(4, dirty=False)
         circuits = {
             "RwUn": uncompute(source, mode=2),
-            "Reqomp": quantum_to_ancilla_circuit(source).uncompute(2),
+            "Reqomp": uncompute_reqomp(quantum_to_ancilla_circuit(source), 2),
         }
 
         for tool, circuit in circuits.items():
@@ -496,15 +551,16 @@ class ArtifactSmokeTests(unittest.TestCase):
 
 
 class EvaluationConfigurationTests(unittest.TestCase):
-    def test_quick_profile_uses_small_deterministic_samples(self):
+    def test_quick_profile_uses_deterministic_samples(self):
         with tempfile.TemporaryDirectory() as directory, patch(
             "RwUn.evaluation_utils.random_test", return_value={"s1": 1.0}
         ) as random_test:
             evaluate(qfree=True, mode=2, folder=directory, quick=True)
 
         configs = [item.args[0] for item in random_test.call_args_list]
-        self.assertEqual([config.n_gates for config in configs], [50, 100, 150, 200])
-        self.assertTrue(all(config.n_circuits == 10 for config in configs))
+        self.assertEqual([config.n_gates for config in configs], [50, 100, 150, 200, 250, 300, 350])
+        self.assertTrue(all(config.n_circuits == 100 for config in configs))
+        self.assertTrue(all(config.seed == 42 for config in configs))
 
     def test_quick_and_full_outputs_are_isolated(self):
         module = sys.modules[__name__]
@@ -532,15 +588,23 @@ class EvaluationConfigurationTests(unittest.TestCase):
 
 
 def run_reviewer_check():
-    suite = unittest.defaultTestLoader.loadTestsFromTestCase(ArtifactSmokeTests)
+    suite = unittest.TestSuite(
+        unittest.defaultTestLoader.loadTestsFromTestCase(test_case)
+        for test_case in (ArtifactSmokeTests, EvaluationConfigurationTests)
+    )
     if not unittest.TextTestRunner(verbosity=2).run(suite).wasSuccessful():
         raise SystemExit(1)
 
 
 def generate_table1():
-    dependency_path = run_table1_dependency_complexity()
-    table1_path = run_table1()
-    merge_table1_results(table1_path, dependency_path)
+    previous_limit = sys.getrecursionlimit()
+    sys.setrecursionlimit(TABLE1_RECURSION_LIMIT)
+    try:
+        dependency_path = run_table1_dependency_complexity()
+        table1_path = run_table1()
+        merge_table1_results(table1_path, dependency_path)
+    finally:
+        sys.setrecursionlimit(previous_limit)
 
 
 def run_random_evaluation(quick=False):

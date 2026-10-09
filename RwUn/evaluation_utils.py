@@ -1,4 +1,6 @@
 import random
+from concurrent.futures import ThreadPoolExecutor
+import threading
 from qiskit.circuit import QuantumRegister, QuantumCircuit, AncillaRegister, ClassicalRegister
 from reqomp.ancilla_circuit import AncillaCircuit, AncillaGate
 from RwUn.uncomp import *
@@ -12,6 +14,21 @@ import json
 import matplotlib.pyplot as plt
 import qiskit.qpy as qpy
 from RwUn.dependencygraph import *
+
+def uncompute_reqomp(circuit, n_ancillas, *, stack_size=256 * 1024 * 1024):
+    """Run Reqomp with the native stack needed for the evaluation's recursion budget.
+
+    Python 3.10's default main-thread stack can overflow before RecursionError.
+    Keep this call synchronous and propagate the original result or exception.
+    """
+    with ThreadPoolExecutor(max_workers=1) as executor:
+        previous_stack_size = threading.stack_size(stack_size)
+        try:
+            result = executor.submit(circuit.uncompute, n_ancillas)
+        finally:
+            threading.stack_size(previous_stack_size)
+        return result.result()
+
 
 def quantum_to_ancilla_circuit(qc: QuantumCircuit) -> AncillaCircuit:
     regs = []
@@ -131,6 +148,7 @@ class ExperimentConfig:
 
 
 def random_circuit_batch(config: ExperimentConfig, qfree, all_uncomputable=True):
+    """Generate a seeded batch and save it to QPY."""
     seed, n_qubs, n_ancs, n_gates, n_circs, _ = config.unpack()
     rng = random.Random(seed)
 
@@ -138,12 +156,6 @@ def random_circuit_batch(config: ExperimentConfig, qfree, all_uncomputable=True)
     os.makedirs(folder, exist_ok=True)
 
     filename = os.path.join(folder, f"{seed}_{n_qubs}_{n_ancs}_{n_gates}_{n_circs}.qpy")
-
-    if os.path.exists(filename):
-        circuits = load_with_registers(filename, n_qubs, n_ancs)
-        QC1 = circuits
-        QC2 = [quantum_to_ancilla_circuit(C) for C in QC1]
-        return QC1, QC2
 
     QC1, QC2 = [], []
     for i in range(n_circs):
@@ -214,20 +226,16 @@ def random_test(config: ExperimentConfig, qfree, all_uncomputable=True):
             qc1_success = True
         except Exception as e:
             pass
-        e = time()
-        t_qc1 += e - s
 
         s = time()
         try:
-            qc2.uncompute(config.n_ancillas)
+            uncompute_reqomp(qc2, config.n_ancillas)
             e = time()
             t_qc2 += e - s
             n_qc2_success += 1
             qc2_success = True
         except Exception as e:
             pass
-        e = time()
-        t_qc2 += e - s
 
         if qc1_success and not qc2_success:
             s_only_qc1 += 1
@@ -295,22 +303,21 @@ def random_test(config: ExperimentConfig, qfree, all_uncomputable=True):
 
 
 def evaluate(qfree, mode=0, folder="evaluation", all_uncomputable=True, quick=False):
-    # n_circs = 10 if quick else 100
     n_circs = 100
 
-    # 10 width and 5~60 gates
+    # 5 data qubits + 5 ancillas; 5 to 55 gates.
     if mode == 0:
         n_qubs, n_ancs = 5, 5
         begin, end, step = 5, 56, 5
         if quick:
             end = 56
-    # 80 width and 50~200 gates
+    # 40 data qubits + 40 ancillas; 50 to 140 gates.
     elif mode == 1:
         n_qubs, n_ancs = 40, 40
         begin, end, step = 50, 141, 10
         if quick:
             end = 131
-    # 400 width and 50~200 gates
+    # 200 data qubits + 200 ancillas; 50 to 500 gates.
     elif mode == 2:
         n_qubs, n_ancs = 200, 200
         begin, end, step = 50, 501, 50    
@@ -357,10 +364,10 @@ def plot_results(folder):
             results = data["results"]
 
             gate_counts.append(config["n_gates"])
-            my_success_rates.append(results[0])
-            other_success_rates.append(results[1])
-            my_times.append(results[2])
-            other_times.append(results[3])
+            my_success_rates.append(results["s1"])
+            other_success_rates.append(results["s2"])
+            my_times.append(results["t1"])
+            other_times.append(results["t2"])
 
     sorted_data = sorted(zip(gate_counts, my_success_rates, other_success_rates, my_times, other_times))
 

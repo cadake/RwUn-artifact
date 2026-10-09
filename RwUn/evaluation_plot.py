@@ -32,6 +32,22 @@ def load_results(folder: str, wanted_fields=None):
             continue
 
         res = data.get("results", {})
+        # Conditional rates and averages are undefined for an empty subgroup.
+        empty_fields = []
+        if res.get("cyc") == 0:
+            empty_fields.extend(("s1_cyc", "s2_cyc"))
+        if res.get("cyc") == 1:
+            empty_fields.extend(("s1_no_cyc", "s2_no_cyc"))
+        if res.get("s1_only") == 0:
+            empty_fields.extend(("dep_1_success", "cyc_1_success"))
+        n_circuits = config.get("n_circuits")
+        if all(value is not None for value in (n_circuits, res.get("s1"), res.get("s1_only"))):
+            both_success = round(n_circuits * res["s1"]) - res["s1_only"]
+            if both_success == 0:
+                empty_fields.extend(("dep_both_success", "cyc_both_success"))
+        for field in empty_fields:
+            if field in res:
+                res[field] = None
         rows.append({"gate": gate, "results": res})
 
         if wanted_fields is None:

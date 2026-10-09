@@ -1,5 +1,6 @@
 # Python bytecode and caches
 __pycache__/
+
 *.py[cod]
 *$py.class
 
@@ -32,6 +33,7 @@ coverage.xml
 .ruff_cache/
 .pyre/
 .hypothesis/
+experiments/
 
 # Jupyter notebooks
 .ipynb_checkpoints/
@@ -46,7 +48,9 @@ coverage.xml
 .idea/
 .vscode/
 .DS_Store
+._*
 Thumbs.db
+.git-backup/
 
 .agents/
 .codex/

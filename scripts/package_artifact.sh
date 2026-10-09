@@ -12,17 +12,29 @@ image_archive_names=(
     "rwun-artifact-image-linux-arm64.tar.gz"
 )
 build_args=()
+tar_command=tar
+if command -v gtar >/dev/null 2>&1; then
+    tar_command=gtar
+fi
 
 if [[ -n "${PYTHON_IMAGE:-}" ]]; then
     build_args+=(--build-arg "PYTHON_IMAGE=${PYTHON_IMAGE}")
 fi
 
-for command in docker tar gzip sha256sum; do
+for command in docker "${tar_command}" gzip sha256sum; do
     if ! command -v "${command}" >/dev/null 2>&1; then
         echo "error: required command not found: ${command}" >&2
         exit 1
     fi
 done
+
+case "$("${tar_command}" --version)" in
+    *"GNU tar"*) ;;
+    *) echo "error: GNU tar is required; install it as tar or gtar" >&2; exit 1 ;;
+esac
+
+# Do not copy macOS extended attributes into the release archive.
+export COPYFILE_DISABLE=1
 
 if ! docker buildx version >/dev/null 2>&1; then
     echo "error: Docker Buildx is required for multi-platform builds" >&2
@@ -65,7 +77,7 @@ mkdir -p "${staged_artifact}"
 
 # Stage only reviewer-facing source files so the Docker image and archive are
 # built from the same clean tree.
-tar \
+"${tar_command}" \
     --directory="${artifact_root}" \
     --exclude=.git \
     --exclude=.github \
@@ -77,15 +89,19 @@ tar \
     --exclude='*/__pycache__' \
     --exclude='*.py[cod]' \
     --exclude='*.egg-info' \
+    --exclude=.DS_Store \
+    --exclude='._*' \
+    --exclude=Thumbs.db \
     --exclude=build \
     --exclude='*/build' \
     --exclude=dist \
     --exclude=evaluation \
     --exclude=evaluation-docker \
     --exclude=evaluation_results \
+    --exclude=experiments \
     --create \
     --file=- \
-    . | tar --directory="${staged_artifact}" --extract --file=-
+    . | "${tar_command}" --directory="${staged_artifact}" --extract --file=-
 
 mkdir -p "${staged_artifact}/dist"
 
@@ -126,7 +142,7 @@ for index in "${!image_platforms[@]}"; do
 done
 
 echo "packaging: ${archive}"
-tar \
+"${tar_command}" \
     --directory="${staging_dir}" \
     --sort=name \
     --mtime="@${epoch}" \
@@ -138,7 +154,7 @@ tar \
     rwun-artifact | gzip --no-name --stdout > "${archive_tmp}"
 gzip --test "${archive_tmp}"
 for image_archive_name in "${image_archive_names[@]}"; do
-    tar --list --gzip --file="${archive_tmp}" \
+    "${tar_command}" --list --gzip --file="${archive_tmp}" \
         "rwun-artifact/dist/${image_archive_name}" >/dev/null
 done
 mv "${archive_tmp}" "${archive}"

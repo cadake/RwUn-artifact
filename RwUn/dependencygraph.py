@@ -560,7 +560,7 @@ def has_cross_ancilla_cycle(qc: QuantumCircuit) -> int:
         if et == "c":
             H.add_edge(u, v)
 
-            w = wire_of(u)  # = wire_of(v) for 'c' edges in your construction
+            w = wire_of(u)  # = wire_of(v) for 'c' edges
             if w is not None and w not in ancilla_wire_set:
                 H.add_edge(v, u)  # only working-wire target edges become bidirected
         else:

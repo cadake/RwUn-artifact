@@ -1,6 +1,6 @@
 size, depth, dependency, cycle
-IntegerComparator(200, dirty=False)
-$\SD{200}{200}$
+IntegerComparator(61, dirty=False)
+$\SD{200}{89}$
 (0, 0)
 
 MCX(201, dirty=False)
@@ -8,7 +8,7 @@ $\SD{200}{200}$
 (0, 0)
 
 MCRY(10)
-$\SD{6}{5}$
+$\SD{9}{8}$
 (0, 0)
 
 Incrementer(101, dirty=False)
@@ -27,8 +27,8 @@ MCX(101, dirty=True)
 $\SD{199}{199}$
 (1, 0)
 
-Adder(100)
-$\SD{199}{100}$
+Adder(34)
+$\SD{200}{38}$
 (1, 0)
 
 ConditionalMCS(52, dirty=False)
@@ -66,3 +66,19 @@ $\SD{173}{137}$
 Incrementer(15, dirty=True)
 $\SD{197}{184}$
 (803, 0)
+
+Multiplier(5)
+$\SD{145}{34}$
+(27, 0)
+
+PiecewiseLinearRotation(2, seed=42)
+$\SD{80}{64}$
+(0, 0)
+
+PolynomialPauliRotation(6, coeffs=[2]*6)
+$\SD{187}{77}$
+(0, 0)
+
+WeightedAdder(11, seed=42)
+$\SD{158}{56}$
+(0, 0)

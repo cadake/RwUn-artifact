@@ -13,35 +13,38 @@ ALLOWED_ANCILLA = ["x", "z", "s", "sdg", "t", "tdg", "cx", "ccx", "mcx"]
 ALLOWED_QFREE = ["x", "cx", "ccx", "mcx"]
 ALLOWED_PHASE = ["z", "s", "sdg", "t", "tdg"]
 
-def is_allowed_instruction(g : Instruction) -> bool:
-    if g.name in ALLOWED_GATES:
+def is_allowed_instruction(g : Instruction, allowed_gates=None) -> bool:
+    allowed_gates = ALLOWED_GATES if allowed_gates is None else allowed_gates
+    if g.name in allowed_gates:
         return True
     elif g.definition is not None:
-        return all(is_allowed_instruction(op[0]) for op in g.definition.data)
+        return all(is_allowed_instruction(op[0], allowed_gates) for op in g.definition.data)
     else:
         assert False, f"not allowed gate: {g.name}"
 
-def flatten_instruction(instr: Instruction, qargs, clargs):
-    if instr.name in ALLOWED_GATES:
+def flatten_instruction(instr: Instruction, qargs, clargs, allowed_gates=None):
+    allowed_gates = ALLOWED_GATES if allowed_gates is None else allowed_gates
+    if instr.name in allowed_gates:
         return [(instr, qargs, clargs)]
     elif instr.definition is not None:
         flat_ops = []
         for sub_instr, sub_qargs, sub_clargs in instr.definition.data:
-            mapped_qargs = [qargs[q.index] for q in sub_qargs]
-            mapped_clargs = [clargs[c.index] for c in sub_clargs]
-            flat_ops.extend(flatten_instruction(sub_instr, mapped_qargs, mapped_clargs))
+            mapped_qargs = [qargs[instr.definition.find_bit(q).index] for q in sub_qargs]
+            mapped_clargs = [clargs[instr.definition.find_bit(c).index] for c in sub_clargs]
+            flat_ops.extend(flatten_instruction(sub_instr, mapped_qargs, mapped_clargs, allowed_gates))
         return flat_ops
     else:
         raise ValueError(f"Unsupported instruction: {instr.name}")
 
-def flatten_if_allowed(circuit: QuantumCircuit) -> QuantumCircuit:
-    if not all(is_allowed_instruction(op[0]) for op in circuit.data):
+def flatten_if_allowed(circuit: QuantumCircuit, allowed_gates=None) -> QuantumCircuit:
+    """Expand subcircuits; an explicit gate set may be supplied for analysis only."""
+    if not all(is_allowed_instruction(op[0], allowed_gates) for op in circuit.data):
         raise ValueError("Circuit is not qfree.")
 
     flat_circuit = QuantumCircuit(*circuit.qregs, *circuit.cregs, name=circuit.name + "_flat")
 
     for instr, qargs, clargs in circuit.data:
-        ops = flatten_instruction(instr, qargs, clargs)
+        ops = flatten_instruction(instr, qargs, clargs, allowed_gates)
         for g, q, c in ops:
             flat_circuit.append(g, q, c)
 

@@ -2,6 +2,7 @@ from qiskit.quantum_info import SparsePauliOp, Operator, Statevector, DensityMat
 from qiskit.transpiler.preset_passmanagers import generate_preset_pass_manager
 from qiskit.primitives import Sampler
 import numpy as np
+import random
 from qiskit import QuantumCircuit, QuantumRegister, AncillaRegister
 from RwUn.uncomp import *
 from RwUn.examples.adder import *
@@ -11,7 +12,15 @@ from RwUn.examples.intergercomparator import *
 from RwUn.examples.deutschjozsa import *
 from RwUn.examples.grover import *
 from RwUn.examples.mcry import *
-from RwUn.evaluation_utils import quantum_to_ancilla_circuit
+from RwUn.examples.multiplier import *
+from RwUn.examples.weightedadder import *
+from RwUn.examples.piecewiselinrot import *
+from RwUn.examples.polynomialpaulirot import *
+from RwUn.evaluation_utils import quantum_to_ancilla_circuit, uncompute_reqomp
+import multiprocessing
+import sys
+from time import perf_counter
+import traceback
 
 
 
@@ -380,7 +389,89 @@ def alt10(n: int) -> int:
     return x
 
 
-def _run_efficiency_test(builder, mode=0, begin=1, end=2, step=1, limit=30):
+def _uncomputation_worker(connection, circuit, mode, recursion_limit):
+    """Report only the uncomputation time; startup is outside the budget."""
+    try:
+        try:
+            sys.setrecursionlimit(recursion_limit)
+            connection.send(("started", None))
+            start = perf_counter()
+            if mode == 4:
+                uncompute_reqomp(circuit, circuit._nb_ancillas)
+            else:
+                uncompute(circuit, mode)
+            result = ("success", perf_counter() - start)
+        except BaseException as error:
+            result = ("error", (error, traceback.format_exc()))
+        try:
+            connection.send(result)
+        except (BrokenPipeError, ConnectionResetError):
+            # The parent may already have timed out and closed its end.
+            pass
+    finally:
+        connection.close()
+
+
+def _time_uncomputation(circuit, mode, limit):
+    """Time a Table 1 attempt and terminate its worker if it exceeds limit.
+
+    A separate process also lets us stop Reqomp's native-stack worker thread.
+    Circuit construction, conversion and process startup are not timed.
+    """
+    context = multiprocessing.get_context("spawn")
+    receiver, sender = context.Pipe(duplex=False)
+    process = context.Process(
+        target=_uncomputation_worker,
+        args=(sender, circuit, mode, sys.getrecursionlimit()),
+    )
+    try:
+        process.start()
+        sender.close()
+        try:
+            status, value = receiver.recv()
+            if status == "started":
+                if not receiver.poll(limit):
+                    raise TimeoutError(f"uncomputation exceeded {limit}s")
+                status, value = receiver.recv()
+        except EOFError as error:
+            process.join()
+            raise RuntimeError(
+                f"Uncomputation worker exited without a result (exit code {process.exitcode})"
+            ) from error
+        if status == "error":
+            error, worker_traceback = value
+            raise error from RuntimeError(worker_traceback)
+        if status != "success":
+            raise RuntimeError(f"Unexpected uncomputation worker status: {status}")
+        return value
+    finally:
+        sender.close()
+        try:
+            if process.pid is not None:
+                process.join(timeout=0.1)
+                if process.is_alive():
+                    process.terminate()
+                    process.join(timeout=1)
+                if process.is_alive():
+                    process.kill()
+                    process.join()
+                process.close()
+        finally:
+            receiver.close()
+
+
+def _run_efficiency_test(builder, mode=0, begin=1, end=2, step=1, limit=30,
+                        *, min_n=1, max_n=1000):
+    """Search from begin on its fixed-step grid, within the legal n bounds.
+
+    A failed start selects backward search, which stops at the first success.
+    A successful start selects forward search, which stops at the first failure.
+    end remains the exclusive endpoint of the suggested range, not a hard cap.
+    """
+    if step <= 0 or limit <= 0 or end < begin:
+        raise ValueError("step and limit must be positive, and end >= begin")
+    if not 1 <= min_n <= begin <= max_n:
+        raise ValueError("Expected 1 <= min_n <= begin <= max_n")
     print(f"test efficiency: mode = {mode}")
 
     max_n_in_30s = None
@@ -388,35 +479,50 @@ def _run_efficiency_test(builder, mode=0, begin=1, end=2, step=1, limit=30):
     size = 0
     depth = 0
     star = ""
-    try:
-        for n in range(begin, end, step):
+    n = begin
+    direction = None
+    extended = False
+    while min_n <= n <= max_n:
+        if direction == 1 and n >= end and not extended:
+            print(f"extending past preset end={end}, step={step}")
+            extended = True
+        succeeded = False
+        try:
             C = builder(n)
             s = C.size()
             d = C.depth()
             if mode == 4:
                 C = quantum_to_ancilla_circuit(C)
-                ancs = C._nb_ancillas
-            start_time = time()
-            if mode == 4:
-                C.uncompute(ancs)
-            else:
-                uncompute(C, mode)
-            elapsed = time() - start_time
+            print(f"n = {n}: starting uncomputation (limit={limit}s)", flush=True)
+            elapsed = _time_uncomputation(C, mode, limit)
 
-            print(f"n = {n} {elapsed}s")
+            succeeded = elapsed <= limit
+            status = "success" if succeeded else "timeout"
+            print(f"n = {n} {elapsed}s ({status})")
+        except TimeoutError:
+            print(f"n = {n}: timeout after {limit}s (worker terminated)", flush=True)
+        except RecursionError as e:
+            star = "*"
+            print(f"n = {n}: recursion limit: {e}")
+        except AssertionError as e:
+            print(f"n = {n}: assertion failure: {e}")
 
-            if elapsed > limit:
-                break
-
+        if succeeded:
             max_n_in_30s = n
             time_for_n = elapsed
             size = s
             depth = d
-    except RecursionError as e:
-        star = "*"
-        print(e)
-    except AssertionError as e:
-        print(e)
+            if direction == -1:
+                break
+            direction = 1
+        elif direction == 1:
+            break
+        else:
+            direction = -1
+        n += direction * step
+
+    if n < min_n or n > max_n:
+        print(f"search reached fixed-step grid boundary [{min_n}, {max_n}]")
     return f"{mode}, {max_n_in_30s}{star}, {time_for_n}, {size}, {depth}"
 
 
@@ -427,10 +533,11 @@ def test_adder_efficiency(mode=0, begin=1, end=2, step=1):
     )
 
 
-def test_dirtyadder_efficiency(mode=0, begin=1, end=2, step=1):
+def test_dirtyadder_efficiency(mode=0, begin=3, end=4, step=1):
+    # Exclude the no-ancilla and single-carry corner cases for every method.
     return _run_efficiency_test(
         lambda n: makesDirtyAdder(n),
-        mode=mode, begin=begin, end=end, step=step
+        mode=mode, begin=begin, end=end, step=step, min_n=3
     )
 
 
@@ -455,31 +562,31 @@ def test_dirtymcx_efficiency(mode=0, begin=1, end=2, step=1):
     )
 
 
-def test_conditionalcleanmcx_efficiency(mode=0, begin=1, end=2, step=1):
+def test_conditionalcleanmcx_efficiency(mode=0, begin=6, end=7, step=1):
     return _run_efficiency_test(
         lambda n: makeConditionalMCX(n, False),
-        mode=mode, begin=begin, end=end, step=step
+        mode=mode, begin=begin, end=end, step=step, min_n=6
     )
 
 
-def test_conditionaldirtymcx_efficiency(mode=0, begin=1, end=2, step=1):
+def test_conditionaldirtymcx_efficiency(mode=0, begin=6, end=7, step=1):
     return _run_efficiency_test(
         lambda n: makeConditionalMCX(n, True),
-        mode=mode, begin=begin, end=end, step=step
+        mode=mode, begin=begin, end=end, step=step, min_n=6
     )
 
 
-def test_riseconditionalcleanmcx_efficiency(mode=0, begin=1, end=2, step=1):
+def test_riseconditionalcleanmcx_efficiency(mode=0, begin=6, end=7, step=1):
     return _run_efficiency_test(
         lambda n: makeRiseConditionalMCX(n, False),
-        mode=mode, begin=begin, end=end, step=step
+        mode=mode, begin=begin, end=end, step=step, min_n=6
     )
 
 
-def test_riseconditionaldirtymcx_efficiency(mode=0, begin=1, end=2, step=1):
+def test_riseconditionaldirtymcx_efficiency(mode=0, begin=6, end=7, step=1):
     return _run_efficiency_test(
         lambda n: makeRiseConditionalMCX(n, True),
-        mode=mode, begin=begin, end=end, step=step
+        mode=mode, begin=begin, end=end, step=step, min_n=6
     )
 
 
@@ -511,24 +618,25 @@ def test_dirtyincrementer_efficiency(mode=0, begin=1, end=1, step=1):
     )
 
 
-def test_gidneydirtyincrementer_efficiency(mode=0, begin=1, end=1, step=1):
+def test_gidneydirtyincrementer_efficiency(mode=0, begin=2, end=3, step=1):
+    # At n=1 the ancilla is never modified; the circuit is just X on the data.
     return _run_efficiency_test(
         lambda n: makesDirtyIncrementer(n),
-        mode=mode, begin=begin, end=end, step=step
+        mode=mode, begin=begin, end=end, step=step, min_n=2
     )
 
 
-def test_DJ_efficiency(mode=0, begin=1, end=1, step=1):
+def test_DJ_efficiency(mode=0, begin=3, end=4, step=1):
     return _run_efficiency_test(
         lambda n: makesDJ(n),
-        mode=mode, begin=begin, end=end, step=step
+        mode=mode, begin=begin, end=end, step=step, min_n=3
     )
 
 
-def test_grover_efficiency(mode=0, begin=1, end=1, step=1):
+def test_grover_efficiency(mode=0, begin=3, end=4, step=1):
     return _run_efficiency_test(
         lambda n: makesGroverCircuit(n),
-        mode=mode, begin=begin, end=end, step=step
+        mode=mode, begin=begin, end=end, step=step, min_n=3
     )
 
 
@@ -537,6 +645,47 @@ def test_mcry_efficiency(mode=0, begin=1, end=1, step=1):
         lambda n: makeMCRY(n),
         mode=mode, begin=begin, end=end, step=step
     )
+
+def weighted_adder_weights(n, seed=42):
+    rng = random.Random(f"{seed}:weighted_adder:{n}")
+    return [rng.randint(0, 10) for _ in range(n)]
+
+
+def piecewise_rotation_parameters(n, seed=42):
+    rng = random.Random(f"{seed}:piecewise_linear_rotation:{n}")
+    count = rng.randint(2, min(1 << n, 100))
+    breakpoints = sorted(rng.sample(range(1 << n), count))
+    slopes = [rng.randint(0, 100) for _ in range(count)]
+    offsets = [rng.randint(0, 200) for _ in range(count)]
+    return breakpoints, slopes, offsets
+
+
+def test_multiplier_efficiency(mode=0, begin=1, end=2, step=1):
+    return _run_efficiency_test(
+        makesMult, mode=mode, begin=begin, end=end, step=step
+    )
+
+
+def test_weightedadder_efficiency(mode=0, begin=1, end=2, step=1):
+    return _run_efficiency_test(
+        lambda n: makeWeightedAdder(n, weighted_adder_weights(n)),
+        mode=mode, begin=begin, end=end, step=step
+    )
+
+
+def test_piecewiselinrot_efficiency(mode=0, begin=1, end=2, step=1):
+    return _run_efficiency_test(
+        lambda n: makesPLR(n, *piecewise_rotation_parameters(n)),
+        mode=mode, begin=begin, end=end, step=step
+    )
+
+
+def test_polynomialpaulirot_efficiency(mode=0, begin=1, end=2, step=1):
+    return _run_efficiency_test(
+        lambda n: makesPolyPauliRot(n, [2] * n),
+        mode=mode, begin=begin, end=end, step=step
+    )
+
 
 def test_efficiency(test_f_efficiency):
     test_f_efficiency(0)
@@ -558,9 +707,6 @@ def test_functionality(test_f_functionality):
     # uncomputation with dirty version
     test_f_functionality(True, 3)
     test_f_functionality(True, 4)
-
-
-
 
 
 

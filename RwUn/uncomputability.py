@@ -62,8 +62,6 @@ def check_injective_when_bits_zero(state: dict, fixed_names: list[str]) -> bool:
     input_diff = Or([inputs1[name] != inputs2[name] for name in other_inputs])
     solver.add(input_diff)
 
-    res = solver.check() == unsat
-
     return solver.check() == unsat
 
 def is_clean_uncomputable(C: QuantumCircuit, ancs: AncillaRegister) -> bool:

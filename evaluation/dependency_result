@@ -1,0 +1,84 @@
+size, depth, dependency, cycle
+IntegerComparator(61, dirty=False)
+$\SD{200}{89}$
+(0, 0)
+
+MCX(201, dirty=False)
+$\SD{200}{200}$
+(0, 0)
+
+MCRY(10)
+$\SD{9}{8}$
+(0, 0)
+
+Incrementer(101, dirty=False)
+$\SD{200}{100}$
+(0, 0)
+
+DJ(66)
+$\SD{199}{67}$
+(0, 0)
+
+GroverCircuit(6)
+$\SD{200}{68}$
+(0, 0)
+
+MCX(101, dirty=True)
+$\SD{199}{199}$
+(1, 0)
+
+Adder(34)
+$\SD{200}{38}$
+(1, 0)
+
+ConditionalMCS(52, dirty=False)
+$\SD{19}{8}$
+(6, 0)
+
+ConditionalMCS(52, dirty=True)
+$\SD{32}{13}$
+(11, 0)
+
+RiseConditionalMCS(51, dirty=False)
+$\SD{199}{100}$
+(5, 0)
+
+RiseConditionalMCS(27, dirty=True)
+$\SD{200}{103}$
+(7, 0)
+
+IntegerComparator(58, dirty=True)
+$\SD{200}{172}$
+(4, 0)
+
+DirtyHighestBitConstAdder(41)
+$\SD{199}{160}$
+(4, 0)
+
+DirtyIncrementer(25)
+$\SD{195}{147}$
+(61, 1)
+
+DirtyAdder(9)
+$\SD{173}{137}$
+(601, 0)
+
+Incrementer(15, dirty=True)
+$\SD{197}{184}$
+(803, 0)
+
+Multiplier(5)
+$\SD{145}{34}$
+(27, 0)
+
+PiecewiseLinearRotation(2, seed=42)
+$\SD{80}{64}$
+(0, 0)
+
+PolynomialPauliRotation(6, coeffs=[2]*6)
+$\SD{187}{77}$
+(0, 0)
+
+WeightedAdder(11, seed=42)
+$\SD{158}{56}$
+(0, 0)

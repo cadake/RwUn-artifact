@@ -21,6 +21,19 @@ if [[ -n "${PYTHON_IMAGE:-}" ]]; then
     build_args+=(--build-arg "PYTHON_IMAGE=${PYTHON_IMAGE}")
 fi
 
+# Forward an existing build proxy without recording its value in this script.
+for proxy_variable in HTTP_PROXY HTTPS_PROXY NO_PROXY http_proxy https_proxy no_proxy; do
+    if [[ -n "${!proxy_variable:-}" ]]; then
+        build_args+=(--build-arg "${proxy_variable}")
+    fi
+done
+if [[ -n "${RWUN_BUILD_NETWORK:-}" ]]; then
+    build_args+=(--network "${RWUN_BUILD_NETWORK}")
+    if [[ "${RWUN_BUILD_NETWORK}" == host ]]; then
+        build_args+=(--allow network.host)
+    fi
+fi
+
 for command in docker "${tar_command}" gzip sha256sum; do
     if ! command -v "${command}" >/dev/null 2>&1; then
         echo "error: required command not found: ${command}" >&2
@@ -114,6 +127,13 @@ mkdir -p "${staged_artifact}"
 
 mkdir -p "${staged_artifact}/dist"
 
+for excluded_directory in evaluation evaluation-docker evaluation_results experiment experiments .venv venv env ENV .aws; do
+    if [[ -e "${staged_artifact}/${excluded_directory}" ]]; then
+        echo "error: excluded directory entered staging: ${excluded_directory}" >&2
+        exit 1
+    fi
+done
+
 for index in "${!image_platforms[@]}"; do
     image_platform="${image_platforms[index]}"
     image_archive_name="${image_archive_names[index]}"
@@ -139,15 +159,13 @@ for index in "${!image_platforms[@]}"; do
     echo "exporting: ${image_archive}"
     docker save "${image_tag}" | gzip --no-name --stdout > "${image_archive_tmp}"
     gzip --test "${image_archive_tmp}"
-    mv "${image_archive_tmp}" "${image_archive}"
+    mv "${image_archive_tmp}" "${staged_artifact}/dist/${image_archive_name}"
 
     (
-        cd "${output_dir}"
+        cd "${staged_artifact}/dist"
         sha256sum "${image_archive_name}" > "${image_checksum_tmp}"
     )
-    mv "${image_checksum_tmp}" "${image_archive}.sha256"
-
-    cp "${image_archive}" "${image_archive}.sha256" "${staged_artifact}/dist/"
+    mv "${image_checksum_tmp}" "${staged_artifact}/dist/${image_archive_name}.sha256"
 done
 
 echo "packaging: ${archive}"
@@ -166,12 +184,19 @@ for image_archive_name in "${image_archive_names[@]}"; do
     "${tar_command}" --list --gzip --file="${archive_tmp}" \
         "rwun-artifact/dist/${image_archive_name}" >/dev/null
 done
-mv "${archive_tmp}" "${archive}"
+mv "${archive_tmp}" "${staging_dir}/${archive_name}"
 
 (
-    cd "${output_dir}"
+    cd "${staging_dir}"
     sha256sum "${archive_name}" > "${archive_checksum_tmp}"
 )
+
+# Publish only after both freshly built images have passed validation.
+for image_archive_name in "${image_archive_names[@]}"; do
+    mv "${staged_artifact}/dist/${image_archive_name}" "${output_dir}/${image_archive_name}"
+    mv "${staged_artifact}/dist/${image_archive_name}.sha256" "${output_dir}/${image_archive_name}.sha256"
+done
+mv "${staging_dir}/${archive_name}" "${archive}"
 mv "${archive_checksum_tmp}" "${archive}.sha256"
 
 for image_archive_name in "${image_archive_names[@]}"; do

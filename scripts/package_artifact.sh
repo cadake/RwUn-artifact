@@ -56,15 +56,16 @@ fi
 
 mkdir -p "${output_dir}"
 
-staging_dir=$(mktemp -d)
+mkdir -p "${artifact_root}/experiment"
+staging_dir=$(mktemp -d "${artifact_root}/experiment/package.XXXXXX")
 staged_artifact="${staging_dir}/rwun-artifact"
-archive_tmp="${archive}.tmp"
-archive_checksum_tmp="${archive}.sha256.tmp"
+archive_tmp="${staging_dir}/${archive_name}.tmp"
+archive_checksum_tmp="${staging_dir}/${archive_name}.sha256.tmp"
 temporary_files=("${archive_tmp}" "${archive_checksum_tmp}")
 
 for image_archive_name in "${image_archive_names[@]}"; do
     image_archive="${output_dir}/${image_archive_name}"
-    temporary_files+=("${image_archive}.tmp" "${image_archive}.sha256.tmp")
+    temporary_files+=("${staging_dir}/${image_archive_name}.tmp" "${staging_dir}/${image_archive_name}.sha256.tmp")
 done
 
 cleanup() {
@@ -83,6 +84,7 @@ mkdir -p "${staged_artifact}"
     --exclude=.github \
     --exclude=.agents \
     --exclude=.codex \
+    --exclude=.aws \
     --exclude=.idea \
     --exclude=.vscode \
     --exclude='*/.git-backup' \
@@ -99,6 +101,13 @@ mkdir -p "${staged_artifact}"
     --exclude=evaluation-docker \
     --exclude=evaluation_results \
     --exclude=experiments \
+    --exclude=experiment \
+    --exclude=.venv \
+    --exclude=venv \
+    --exclude=env \
+    --exclude=ENV \
+    --exclude='*.log' \
+    --exclude='*.tmp' \
     --create \
     --file=- \
     . | "${tar_command}" --directory="${staged_artifact}" --extract --file=-
@@ -109,8 +118,8 @@ for index in "${!image_platforms[@]}"; do
     image_platform="${image_platforms[index]}"
     image_archive_name="${image_archive_names[index]}"
     image_archive="${output_dir}/${image_archive_name}"
-    image_archive_tmp="${image_archive}.tmp"
-    image_checksum_tmp="${image_archive}.sha256.tmp"
+    image_archive_tmp="${staging_dir}/${image_archive_name}.tmp"
+    image_checksum_tmp="${staging_dir}/${image_archive_name}.sha256.tmp"
 
     echo "building: ${image_tag} (${image_platform})"
     docker buildx build \
